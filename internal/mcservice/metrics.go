@@ -69,7 +69,7 @@ func NewMetricsService(serverDir string, procMgr *ProcessManager, rcon RCONClien
 func (ms *MetricsService) CollectCurrentMetrics() SystemMetrics {
 	now := time.Now().Format("15:04:05")
 	procStatus := ms.procMgr.GetStatus()
-	running := (procStatus.Status == StatusRunning || procStatus.Status == StatusStarting)
+	running := (procStatus.Status == StatusRunning)
 
 	m := SystemMetrics{
 		Timestamp:     now,

@@ -4,11 +4,16 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"minecraft_server_manager/internal/mcservice"
 )
 
 // GetDatapacks returns the current enabled/disabled datapacks and experimental gameplay toggles.
 func (h *Handler) GetDatapacks(c *gin.Context) {
-	status, err := h.datapackMgr.GetStatus(h.mcService)
+	var rcon mcservice.RCONClient
+	if h.procMgr != nil && h.procMgr.GetStatus().Status == mcservice.StatusRunning {
+		rcon = h.mcService
+	}
+	status, err := h.datapackMgr.GetStatus(rcon)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "데이터팩 상태 조회 실패: " + err.Error()})
 		return

@@ -514,3 +514,12 @@ function initConsole() {
     renderMetricsChart();
   });
 }
+
+// Window-level exports for cross-module calls
+window.initConsole = initConsole;
+window.fetchLogs = fetchLogs;
+window.fetchMetrics = fetchMetrics;
+window.renderMetricsData = renderMetricsData;
+window.renderMetricsChart = renderMetricsChart;
+window.sendConsoleCommand = sendConsoleCommand;
+

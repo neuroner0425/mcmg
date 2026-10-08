@@ -979,6 +979,9 @@ async function checkSystemUpdate(manual = false) {
   const branchEl = document.getElementById('currentBranchName');
   const checkTimeEl = document.getElementById('lastCheckTime');
 
+  if (currentHashEl && (!currentHashEl.textContent || currentHashEl.textContent === '-')) currentHashEl.textContent = '조회 중...';
+  if (branchEl && (!branchEl.textContent || branchEl.textContent === '-')) branchEl.textContent = '조회 중...';
+
   if (btnCheck) {
     btnCheck.disabled = true;
     btnCheck.innerHTML = '<span>⏳</span> 확인 중...';
@@ -1131,4 +1134,8 @@ async function handleApplySystemUpdate() {
     }
   }
 }
+
+// Window attachments for navigation subtab switcher
+window.checkSystemUpdate = checkSystemUpdate;
+window.handleApplySystemUpdate = handleApplySystemUpdate;
 

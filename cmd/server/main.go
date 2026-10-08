@@ -67,6 +67,9 @@ func main() {
 	rconPort := mcservice.ParseRconPort(cfg.MC.RconAddress)
 	procMgr.SetRconConfig(cfg.MC.RconPassword, rconPort)
 	mcservice.EnsureServerProperties(cfg.MC.ServerDir, cfg.MC.RconPassword, rconPort)
+	mcSvc.SetStatusChecker(func() bool {
+		return procMgr.GetStatus().Status == mcservice.StatusRunning
+	})
 	pluginMgr := mcservice.NewPluginManager(cfg.MC.ServerDir)
 	metricsSvc := mcservice.NewMetricsService(cfg.MC.ServerDir, procMgr, mcSvc, propMgr)
 	playerMgmt := mcservice.NewPlayerMgmtService(cfg.MC.ServerDir, mcSvc, propMgr)

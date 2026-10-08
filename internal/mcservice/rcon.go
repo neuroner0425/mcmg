@@ -23,11 +23,12 @@ type RCONClient interface {
 
 // Service manages RCON interactions.
 type Service struct {
-	address    string
-	password   string
-	mu         sync.Mutex
-	conn       *rcon.Conn
-	lastErrLog time.Time
+	address       string
+	password      string
+	mu            sync.Mutex
+	conn          *rcon.Conn
+	lastErrLog    time.Time
+	statusChecker func() bool
 }
 
 // NewService initializes a new RCON-based Minecraft service.
@@ -36,6 +37,20 @@ func NewService(address, password string) *Service {
 		address:  address,
 		password: password,
 	}
+}
+
+// SetStatusChecker configures a callback to check if the Minecraft server is running.
+func (s *Service) SetStatusChecker(fn func() bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.statusChecker = fn
+}
+
+func (s *Service) isRunning() bool {
+	if s.statusChecker != nil {
+		return s.statusChecker()
+	}
+	return true
 }
 
 func (s *Service) logError(format string, v ...interface{}) {
@@ -48,6 +63,10 @@ func (s *Service) logError(format string, v ...interface{}) {
 
 // getConn retrieves an active connection or dials a new one.
 func (s *Service) getConn() (*rcon.Conn, error) {
+	if !s.isRunning() {
+		return nil, errors.New("cannot connect to RCON: server is not running")
+	}
+
 	if s.conn != nil {
 		return s.conn, nil
 	}
@@ -72,6 +91,10 @@ func (s *Service) closeConn() {
 
 // Execute runs a raw console command through RCON with automatic reconnect on socket errors.
 func (s *Service) Execute(command string) (string, error) {
+	if !s.isRunning() {
+		return "", errors.New("cannot execute command: minecraft server is not running")
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

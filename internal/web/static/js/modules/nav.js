@@ -38,17 +38,17 @@ function switchSubTab(subId) {
   }
 }
 
-// Route Mapping & Permission Definitions (5 Core Pages + Backward Compatibility)
+// Route Mapping & Permission Definitions (6 Core Pages + Backward Compatibility)
 const ROUTE_MAP = {
   '/': { target: 'dashboardPane', path: '/dashboard', adminOnly: false },
   '/dashboard': { target: 'dashboardPane', path: '/dashboard', adminOnly: false },
   '/map': { target: 'mapPane', path: '/map', adminOnly: false },
   '/whitelist': { target: 'whitelistPane', path: '/whitelist', adminOnly: false },
+  '/admin/metrics': { target: 'metricsPane', path: '/admin/metrics', adminOnly: true },
   '/admin/console': { target: 'consolePane', path: '/admin/console', adminOnly: true },
   '/admin/settings': { target: 'settingsPane', path: '/admin/settings', sub: 'subConfig', adminOnly: true },
 
   // Compatibility aliases
-  '/admin/metrics': { target: 'consolePane', path: '/admin/console', adminOnly: true },
   '/admin/whitelist': { target: 'whitelistPane', path: '/whitelist', adminOnly: false },
   '/admin/config': { target: 'settingsPane', path: '/admin/settings', sub: 'subConfig', adminOnly: true },
   '/admin/datapacks': { target: 'settingsPane', path: '/admin/settings', sub: 'subDatapacks', adminOnly: true },
@@ -104,9 +104,13 @@ function navigateByPath(pathname, push = false) {
   // Trigger relevant page data fetches
   if (route.target === 'consolePane') {
     if (typeof fetchLogs === 'function') fetchLogs();
-    if (typeof fetchMetrics === 'function') fetchMetrics();
     const consoleOutput = document.getElementById('consoleOutput');
     if (consoleOutput) consoleOutput.scrollTop = consoleOutput.scrollHeight;
+  } else if (route.target === 'metricsPane') {
+    if (typeof fetchMetrics === 'function') fetchMetrics();
+    if (typeof renderMetricsChart === 'function') {
+      requestAnimationFrame(() => renderMetricsChart());
+    }
   } else if (route.target === 'whitelistPane') {
     if (currentUser && currentUser.role === 'admin' && typeof fetchWhitelist === 'function') {
       fetchWhitelist();
