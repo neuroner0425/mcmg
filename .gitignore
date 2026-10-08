@@ -1,0 +1,48 @@
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE & Agent files
+.idea/
+.vscode/
+.agents/
+*.swp
+*.swo
+*~
+
+# Go Binaries and Build artifacts
+/mc_manager
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/bin/
+/dist/
+
+# Application Logs & Temporary backups
+/logs/
+*.log
+*.bak
+*.tmp
+*.temp
+
+# Web Manager runtime storage & backups
+/data/
+
+# Sensitive local credentials (use config.example.yaml as template)
+/config.yaml
+
+# Minecraft Server Runtime & Files (Root directory only)
+/server/
+
+# Architectural Decision Records (Internal records)
+/docs/adr/
+

@@ -1,0 +1,29 @@
+# Minecraft Server Manager Configuration
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+security:
+  user_password: "minecraft_user_password"
+  admin_password: "minecraft_admin_password"
+  jwt_secret: "change_this_to_a_random_secure_key"
+
+mc:
+  rcon_address: "127.0.0.1:25575"
+  rcon_password: "your_rcon_password"
+  
+  # 마인크래프트 서버 파일 전용 디렉터리 (JAR, world, eula, plugins, properties 등 격리)
+  server_dir: "./server"
+  properties_path: "./server/server.properties"
+  jar_name: "purpur.jar"
+  java_path: "java"
+  min_memory: "2G"
+  max_memory: "4G"
+
+data:
+  # 웹 매니저 백업/런타임 데이터 디렉터리
+  backup_dir: "./data/backups"
+
+bluemap:
+  url: "http://127.0.0.1:8100"

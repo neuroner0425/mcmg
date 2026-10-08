@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minecraft Server Manager - Purpur Sanctum</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+  <!-- 1. Authentication View -->
+  <section id="authView" class="auth-wrapper" style="display: flex;">
+    <div class="card auth-card">
+      <div class="auth-header">
+        <h1 class="auth-title">SANCTUM</h1>
+        <p class="auth-subtitle">Minecraft Server Manager</p>
+      </div>
+
+      <form id="loginForm" class="auth-form">
+        <div style="display: flex; flex-direction: column; gap: 4px; text-align: left;">
+          <label for="loginNickname" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">플레이어 닉네임</label>
+          <input type="text" id="loginNickname" class="input" style="width: 100%;" placeholder="플레이어 닉네임" required autofocus>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 4px; text-align: left;">
+          <label for="loginPassword" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">접속 키 (비밀번호)</label>
+          <input type="password" id="loginPassword" class="input" style="width: 100%;" placeholder="비밀번호" required>
+        </div>
+
+        <div id="loginError" class="auth-error"></div>
+        <button type="submit" id="loginSubmitBtn" class="btn btn-primary" style="width: 100%;">접속</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- 2. Application Layout -->
+  <div id="appView" class="app-layout" style="display: none;">
+    
+    <!-- Left Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2 class="sidebar-title">MC MANAGER</h2>
+        <div class="sidebar-subtitle">Purpur Edition</div>
+      </div>
+
+      <nav class="sidebar-nav" aria-label="메인 네비게이션">
+        <!-- 기본 메뉴 (일반 유저 및 관리자 공통) -->
+        <button class="nav-item active" data-target="dashboardPane" data-path="/dashboard" id="tabDashboard">
+          대시보드
+        </button>
+        <button class="nav-item" data-target="mapPane" data-path="/map" id="tabMap">
+          squaremap 지도
+        </button>
+        <button class="nav-item" data-target="whitelistPane" data-path="/whitelist" id="tabWhitelist">
+          화이트리스트
+        </button>
+
+        <!-- 관리자 전용 메뉴 (Admin Only) -->
+        <div class="sidebar-section-divider admin-only" style="display: none;"></div>
+        <div class="sidebar-section-label admin-only" style="display: none;">서버 관리</div>
+
+        <button class="nav-item admin-only" data-target="consolePane" data-path="/admin/console" id="tabConsole" style="display: none;">
+          서버 콘솔 & 모니터링
+        </button>
+        <button class="nav-item admin-only" data-target="settingsPane" data-path="/admin/settings" id="tabSettings" style="display: none;">
+          서버 관리 & 설정
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <span id="userNicknameBadge" style="font-size: 0.8rem; font-weight: 600;">Player</span>
+          <span id="roleBadge" class="badge user" style="width: fit-content;">USER</span>
+        </div>
+        <button id="logoutBtn" class="btn btn-sm" title="로그아웃">
+          로그아웃
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="content-wrapper">
+      
+      <!-- Top Status Bar -->
+      <header class="status-bar">
+        <!-- Server Lifecycle Status -->
+        <div class="status-indicator-wrap">
+          <div id="soulOrb" class="status-dot"></div>
+          <div>
+            <span id="procBadge" class="status-text">STOPPED</span>
+            <span id="procMeta" class="status-meta" style="margin-left: 8px;">Uptime: -</span>
+          </div>
+        </div>
+
+        <!-- World Environment Widget (Weather & Interactive Time Slider) -->
+        <div class="world-env-widget" id="worldWidget">
+          <!-- Weather Toggle Button -->
+          <button type="button" id="btnWeatherToggle" class="weather-btn" title="날씨 (클릭 시 순환 변경)">
+            <span id="weatherIcon">☀️</span>
+            <span id="weatherText">맑음</span>
+          </button>
+
+          <div class="time-widget-divider"></div>
+
+          <!-- Time Display & Interactive Range Slider -->
+          <div class="time-slider-wrap">
+            <div class="time-readout">
+              <span id="timeIcon">☀️</span>
+              <span id="timeText" style="font-family: var(--font-mono); font-weight: 600;">12:00</span>
+              <span id="timePhaseText" style="font-size: 0.75rem; color: var(--text-muted);">(정오)</span>
+            </div>
+            <input type="range" id="timeSlider" min="0" max="24000" step="250" value="6000" class="time-range-input" title="시간 조절 (드래그하여 서버 시간 변경)">
+            <div class="time-quick-presets admin-only" style="display: none;">
+              <button type="button" class="btn-time-preset" data-ticks="1000" title="낮 (07:00)">낮</button>
+              <button type="button" class="btn-time-preset" data-ticks="6000" title="정오 (12:00)">정오</button>
+              <button type="button" class="btn-time-preset" data-ticks="13000" title="일몰 (19:00)">일몰</button>
+              <button type="button" class="btn-time-preset" data-ticks="18000" title="밤 (00:00)">밤</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Server Controls (Admin Only) -->
+        <div id="procActions" class="status-actions admin-only" style="display: none;">
+          <button id="btnStart" class="btn btn-primary btn-sm">서버 시작</button>
+          <button id="btnRestart" class="btn btn-sm">재시작</button>
+          <button id="btnStop" class="btn btn-danger btn-sm">서버 정지</button>
+        </div>
+      </header>
+
+      <!-- Workspace Panes -->
+      <main class="main-content">
+        
+        <!-- Page 1: Dashboard -->
+        <section id="dashboardPane" class="tab-pane active">
+          <!-- Dashboard Offline Banner / Status Card -->
+          <div id="dashboardOfflineCard" class="card offline-status-card" style="display: none; margin-bottom: 20px; border-left: 4px solid var(--accent); background: linear-gradient(135deg, rgba(26,26,36,0.95), rgba(18,18,26,0.98));">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+              <div style="display: flex; align-items: center; gap: 14px;">
+                <div class="offline-icon-box">
+                  <span style="font-size: 1.5rem;">🛑</span>
+                </div>
+                <div>
+                  <h3 id="dashboardOfflineTitle" style="font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 4px;">서버가 종료되어 있습니다.</h3>
+                  <p id="dashboardOfflineDesc" style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">마인크래프트 서버가 오프라인 상태입니다. 서버를 가동하면 모든 기능을 이용할 수 있습니다.</p>
+                </div>
+              </div>
+              <div>
+                <button type="button" id="btnDashboardStart" class="btn btn-primary" style="padding: 10px 22px; font-weight: 600; box-shadow: 0 0 15px rgba(224, 86, 96, 0.35);">
+                  서버 시작하기.
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-dashboard">
+            
+            <!-- Players Card -->
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">온라인 플레이어</h3>
+                <span id="onlineCountBadge" style="font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-secondary);">조회 중...</span>
+              </div>
+
+              <ul id="playerList" class="player-list">
+                <li style="text-align: center; padding: 32px 10px; color: var(--text-muted); font-size: 0.825rem;">
+                  접속 중인 플레이어가 없습니다.
+                </li>
+              </ul>
+            </div>
+
+            <!-- In-Game & Web Live Chat Card -->
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">인게임 채팅</h3>
+              </div>
+
+              <div class="chat-container">
+                <div id="chatHistory" class="chat-box"></div>
+
+                <form id="chatForm" class="chat-form">
+                  <input type="text" id="senderInput" class="input" style="width: 120px;" placeholder="닉네임" required readonly title="로그인된 닉네임이 사용됩니다">
+                  <input type="text" id="messageInput" class="input" style="flex: 1;" placeholder="채팅 메시지 입력..." required>
+                  <button type="submit" id="chatSubmitBtn" class="btn btn-primary" style="width: auto;">전송</button>
+                </form>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- Page 2: BlueMap -->
+        <section id="mapPane" class="tab-pane">
+          <div style="display: flex; flex-direction: column; height: 100%; gap: 8px;">
+            <div class="map-toolbar">
+              <span style="font-size: 0.825rem; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
+                <span>🗺️ squaremap 실시간 월드 지도</span>
+              </span>
+              <div style="display: flex; gap: 8px;">
+                <button id="btnReloadMap" class="btn btn-sm">새로고침</button>
+                <button id="btnFullscreenMap" class="btn btn-primary btn-sm">전체 화면으로 열기 ⛶</button>
+              </div>
+            </div>
+            <div id="mapWrapper" class="map-frame-wrapper" style="flex: 1; position: relative;">
+              <!-- Map Offline Overlay -->
+              <div id="mapOfflineOverlay" class="map-offline-overlay" style="display: none;">
+                <div class="map-offline-content">
+                  <div class="map-offline-icon">🗺️</div>
+                  <h3 id="mapOfflineTitle" class="map-offline-title">지도에 서버가 종료되어 있습니다.</h3>
+                  <p id="mapOfflineDesc" class="map-offline-desc">마인크래프트 서버가 오프라인 상태여서 squaremap 지도를 불러올 수 없습니다.</p>
+                  <button type="button" id="btnMapStart" class="btn btn-primary" style="padding: 12px 28px; font-weight: 600; font-size: 0.95rem; box-shadow: 0 0 20px rgba(224, 86, 96, 0.4);">
+                    서버 시작하기.
+                  </button>
+                </div>
+              </div>
+              <iframe id="bluemapFrame" class="map-frame" src="about:blank" title="squaremap" allow="fullscreen; xr-spatial-tracking; web-share; accelerometer; autoplay; encrypted-media; gyroscope" allowfullscreen></iframe>
+            </div>
+          </div>
+        </section>
+
+        <!-- Page 3: Whitelist & Security Management -->
+        <section id="whitelistPane" class="tab-pane">
+          <!-- 1. Non-Admin User View: Clean Self-Registration Only -->
+          <div id="userWhitelistView" style="display: none; max-width: 540px; margin: 30px auto 0 auto;">
+            <div class="card" style="box-shadow: var(--shadow-card);">
+              <div class="card-header" style="margin-bottom: 12px;">
+                <div>
+                  <h3 class="card-title" style="font-size: 1.05rem;">화이트리스트 등록</h3>
+                  <div style="font-size: 0.775rem; color: var(--text-muted); margin-top: 4px;">서버 접속 권한 신청</div>
+                </div>
+                <span class="badge" style="background: rgba(155, 89, 182, 0.2); color: var(--accent); border: 1px solid rgba(155, 89, 182, 0.4);">MEMBER</span>
+              </div>
+              <p style="font-size: 0.825rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 20px;">
+                서버에 접속하려면 본인의 마인크래프트 닉네임을 등록하세요. 등록 즉시 서버에 반영되어 바로 접속할 수 있습니다.
+              </p>
+              <form id="userWlRegisterForm" style="display: flex; gap: 8px;">
+                <input type="text" id="userWlNameInput" class="input" placeholder="마인크래프트 닉네임 (예: Steve)" required autocomplete="off" style="flex: 1; font-size: 0.875rem;">
+                <button type="submit" id="btnUserWlRegister" class="btn btn-primary" style="white-space: nowrap; padding: 0 20px;">등록하기</button>
+              </form>
+              <div id="userWlStatusMsg" style="margin-top: 12px; font-size: 0.8rem; display: none;"></div>
+            </div>
+          </div>
+
+          <!-- 2. Admin View: Global Switch + Add Form + Full Table -->
+          <div id="adminWhitelistView" class="admin-only" style="display: flex; flex-direction: column; gap: 20px;">
+            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px;">
+              <!-- Whitelist Global Switch Card -->
+              <div class="card">
+                <div class="card-header">
+                  <h3 class="card-title">화이트리스트 접속 제한 설정</h3>
+                  <button id="btnSaveWhitelistConfig" class="btn btn-primary btn-sm">설정 적용</button>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 14px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color);">
+                    <div style="font-weight: 600; font-size: 0.85rem;">화이트리스트 활성화 (white-list)</div>
+                    <label class="checkbox-toggle">
+                      <input type="checkbox" id="wlToggleActive">
+                      <span class="checkbox-slider"></span>
+                    </label>
+                  </div>
+
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color);">
+                    <div style="font-weight: 600; font-size: 0.85rem;">강제 적용 (enforce-whitelist)</div>
+                    <label class="checkbox-toggle">
+                      <input type="checkbox" id="wlToggleEnforce">
+                      <span class="checkbox-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Register New Player Card (Admin) -->
+              <div class="card">
+                <div class="card-header">
+                  <h3 class="card-title">플레이어 직접 등록</h3>
+                </div>
+                <form id="wlAddForm" style="display: flex; flex-direction: column; gap: 10px;">
+                  <input type="text" id="wlPlayerNameInput" class="input" placeholder="플레이어 닉네임 (예: Steve)" required autocomplete="off">
+                  <button type="submit" id="btnWlAdd" class="btn btn-primary" style="width: 100%;">등록</button>
+                </form>
+              </div>
+            </div>
+
+            <!-- Whitelisted Players Table Card -->
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">화이트리스트 목록</h3>
+                <button id="btnRefreshWhitelist" class="btn btn-sm">새로고침</button>
+              </div>
+              <div style="max-height: 400px; overflow-y: auto;">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th style="width: 60px;">#</th>
+                      <th>플레이어 닉네임</th>
+                      <th>고유 식별자 (UUID)</th>
+                      <th style="width: 100px; text-align: center;">작업</th>
+                    </tr>
+                  </thead>
+                  <tbody id="whitelistTableBody">
+                    <tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">화이트리스트 목록을 불러오는 중...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Page 5: Server Management & Settings (Consolidated Admin Center) -->
+        <section id="settingsPane" class="tab-pane">
+          <!-- Sub Navigation Bar -->
+          <div class="sub-nav-bar">
+            <button type="button" class="sub-nav-item active" data-sub="subConfig">
+              <span>⚙️</span> 서버 상세 설정
+            </button>
+            <button type="button" class="sub-nav-item" data-sub="subDatapacks">
+              <span>🧪</span> 실험적 기능 & 데이터팩
+            </button>
+            <button type="button" class="sub-nav-item" data-sub="subPlugins">
+              <span>🧩</span> 플러그인 관리
+            </button>
+            <button type="button" class="sub-nav-item" data-sub="subInstaller">
+              <span>📦</span> Purpur 구동기
+            </button>
+            <button type="button" class="sub-nav-item" data-sub="subBackups">
+              <span>💾</span> 월드 백업 & 복원
+            </button>
+          </div>
+
+          <!-- Sub Pane 1: Server Config -->
+          <div id="subConfig" class="sub-pane active">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title">서버 상세 설정</h3>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                  <button id="btnResetDefaults" class="btn btn-sm" title="모든 설정을 권장 기본값으로 설정">권장 기본값 복원</button>
+                  <button id="saveConfigBtn" class="btn btn-primary btn-sm">설정 일괄 저장 (자동 백업)</button>
+                </div>
+              </div>
+
+              <!-- Filter Search & Category Filter -->
+              <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
+                <input type="text" id="configSearch" class="input" style="flex: 1; min-width: 240px;" placeholder="설정 항목 또는 한국어 설명 검색...">
+                <select id="configCategoryFilter" class="select" style="width: 180px;">
+                  <option value="all">전체 카테고리</option>
+                  <option value="기본 설정">기본 설정</option>
+                  <option value="게임플레이">게임플레이</option>
+                  <option value="월드 생성">월드 생성</option>
+                  <option value="성능 및 렌더링">성능 및 렌더링</option>
+                  <option value="보안 및 접속">보안 및 접속</option>
+                  <option value="네트워크 및 통신">네트워크 및 통신</option>
+                  <option value="리소스팩 및 데이터팩">리소스팩 및 데이터팩</option>
+                  <option value="Purpur 편의 기능">Purpur 편의 기능</option>
+                  <option value="Purpur 몹 라이딩">Purpur 몹 라이딩</option>
+                  <option value="Purpur 몹 상세 설정">Purpur 몹 상세 설정</option>
+                  <option value="Purpur 기타 설정">Purpur 기타 설정</option>
+                  <option value="기타 서버 설정">기타 서버 설정</option>
+                </select>
+              </div>
+
+              <!-- Schema Form Grid -->
+              <div id="schemaFormContainer" style="display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 270px); overflow-y: auto; padding-right: 4px;">
+                <div style="text-align: center; padding: 40px; color: var(--text-muted);">설정 스키마를 불러오는 중...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sub Pane 2: Plugins Management -->
+          <div id="subPlugins" class="sub-pane">
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+              <!-- Spacious Drag & Drop Upload Zone -->
+              <div id="pluginDropzone" class="dropzone" title="클릭하거나 파일을 드래그하여 업로드">
+                <div class="dropzone-icon">⤓</div>
+                <div class="dropzone-title">플러그인 파일(.jar)을 이 넓은 영역에 끌어다 놓으세요</div>
+                <div class="dropzone-desc">파일을 여기로 드롭하면 자동으로 서버에 업로드됩니다 (다중 파일 동시 업로드 지원, 클릭하여 파일 선택 가능)</div>
+                <input type="file" id="pluginFileInput" accept=".jar" multiple style="display: none;">
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px;">
+                <!-- Installed Plugins Table Card -->
+                <div class="card">
+                  <div class="card-header">
+                    <h3 class="card-title">설치된 플러그인 목록</h3>
+                    <button id="btnRefreshPlugins" class="btn btn-sm">새로고침</button>
+                  </div>
+
+                  <div style="max-height: 380px; overflow-y: auto;">
+                    <table class="table">
+                      <thead>
+                        <tr>
+                          <th>파일명</th>
+                          <th>크기</th>
+                          <th>상태</th>
+                          <th style="text-align: right;">작업</th>
+                        </tr>
+                      </thead>
+                      <tbody id="pluginsTableBody">
+                        <tr><td colspan="4" style="text-align: center; padding: 20px; color: var(--text-muted);">목록을 불러오는 중...</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <!-- Remote URL Download Card -->
+                <div class="card">
+                  <div class="card-header">
+                    <h3 class="card-title">원격 URL 플러그인 다운로드</h3>
+                  </div>
+                  <div style="font-size: 0.775rem; color: var(--text-secondary); margin-bottom: 12px;">
+                    외부 웹 링크(SpigotMC, Modrinth, GitHub Releases 등)의 직접 다운로드 URL을 입력하세요.
+                  </div>
+                  <form id="pluginUrlForm" style="display: flex; flex-direction: column; gap: 10px;">
+                    <input type="url" id="pluginUrlInput" class="input" placeholder="https://example.com/Plugin.jar" required>
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">URL로 플러그인 다운로드</button>
+                  </form>
+
+                  <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-color);">
+                    <div style="font-size: 0.775rem; color: var(--text-secondary); margin-bottom: 8px;">
+                      가볍고 빠른 squaremap 지도 플러그인을 서버 버전에 맞춰 자동으로 다운로드하고 포트(8100)를 설정합니다.
+                    </div>
+                    <button type="button" id="btnAutoInstallSquaremap" class="btn btn-secondary btn-sm" style="width: 100%;">
+                      squaremap 자동 다운로드 및 설정
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sub Pane 3: Purpur Installer -->
+          <div id="subInstaller" class="sub-pane">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px;">
+              <!-- Left Card: Purpur Download Form -->
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <h3 class="card-title">Purpur 구동기 다운로드</h3>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+                      버전 선택 시 최신 빌드가 기본 지정되며, 다운로드 시 EULA와 squaremap이 자동 구성됩니다.
+                    </div>
+                  </div>
+                  <span id="jarStatusBadge" class="badge">확인 중</span>
+                </div>
+
+                <form id="installerForm">
+                  <div style="margin-bottom: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                      <label for="purpurVersionSelect" style="font-size: 0.775rem; color: var(--text-secondary);">마인크래프트 버전</label>
+                      <span id="installedVersionHint" style="font-size: 0.7rem; color: var(--accent); font-family: var(--font-mono);"></span>
+                    </div>
+                    <select id="purpurVersionSelect" class="select" style="width: 100%;">
+                      <option value="">버전 목록 로딩 중...</option>
+                    </select>
+                  </div>
+
+                  <div style="margin-bottom: 18px;">
+                    <label for="purpurBuildSelect" style="display: block; font-size: 0.775rem; color: var(--text-secondary); margin-bottom: 4px;">빌드 선택</label>
+                    <select id="purpurBuildSelect" class="select" style="width: 100%;">
+                      <option value="latest">최신 빌드 (Latest)</option>
+                    </select>
+                  </div>
+
+                  <button type="submit" id="btnDownloadPurpur" class="btn btn-primary" style="width: 100%;">
+                    구동기 다운로드 및 즉시 적용
+                  </button>
+                </form>
+
+                <div id="downloadProgressArea" style="margin-top: 20px; display: none;">
+                  <div style="display: flex; justify-content: space-between; font-size: 0.775rem; color: var(--text-secondary); margin-bottom: 6px;">
+                    <span id="dlStatusText" style="display: flex; align-items: center; gap: 6px;">준비 중...</span>
+                    <span id="dlPercentText" style="font-family: var(--font-mono); font-weight: 600; color: var(--accent);">0%</span>
+                  </div>
+                  <div class="progress-bar-wrap" style="height: 10px; background: rgba(0,0,0,0.4); border-radius: 5px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08);">
+                    <div id="dlProgressBar" class="progress-bar-inner" style="width: 0%; height: 100%; background: linear-gradient(90deg, #9b59b6, #e74c3c); transition: width 0.3s ease;"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right Card: Installed Server Info & Environment Status -->
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <h3 class="card-title">현재 구동기 및 런타임 상태</h3>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+                      서버 디렉터리에 설치된 Purpur 바이너리 및 환경 정보입니다.
+                    </div>
+                  </div>
+                  <button type="button" id="btnRefreshInstallerInfo" class="btn btn-sm">새로고침</button>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 14px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                    <span style="font-size: 0.8rem; color: var(--text-secondary);">설치된 구동기 버전</span>
+                    <span id="installedPurpurVersionText" style="font-size: 0.85rem; font-weight: 600; color: #fff; font-family: var(--font-mono);">-</span>
+                  </div>
+
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                    <span style="font-size: 0.8rem; color: var(--text-secondary);">빌드 번호</span>
+                    <span id="installedPurpurBuildText" style="font-size: 0.85rem; font-weight: 600; color: #fff; font-family: var(--font-mono);">-</span>
+                  </div>
+
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                    <span style="font-size: 0.8rem; color: var(--text-secondary);">실행 파일 (Jar)</span>
+                    <span id="installedJarFileText" style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">-</span>
+                  </div>
+
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                    <span style="font-size: 0.8rem; color: var(--text-secondary);">파일 용량 및 설치 시각</span>
+                    <span id="installedPurpurDateText" style="font-size: 0.8rem; color: var(--text-secondary); font-family: var(--font-mono);">-</span>
+                  </div>
+
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                    <span style="font-size: 0.8rem; color: var(--text-secondary);">마인크래프트 EULA 동의</span>
+                    <span id="installedEulaBadge" class="badge badge-enabled">동의됨 (eula=true)</span>
+                  </div>
+
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                    <span style="font-size: 0.8rem; color: var(--text-secondary);">BlueMap 자동 연동</span>
+                    <span class="badge badge-enabled">자동 설치 활성</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sub Pane 4: World Backups -->
+          <div id="subBackups" class="sub-pane">
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+              <div class="card">
+                <div class="card-header">
+                  <div>
+                    <h3 class="card-title">월드 백업 생성</h3>
+                    <div style="font-size: 0.775rem; color: var(--text-secondary); margin-top: 4px;">
+                      RCON 저장을 일시 플러시하고 월드 폴더(오버월드/네더/엔드)를 tar.gz 압축본으로 안전하게 생성합니다.
+                    </div>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                  <input type="text" id="backupDescInput" class="input" style="flex: 1; min-width: 250px;" placeholder="백업 메모/설명 (예: 대규모 건축 전 스냅샷)...">
+                  <button id="btnCreateBackup" class="btn btn-primary">즉시 월드 백업 생성</button>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-header">
+                  <h3 class="card-title">월드 백업 파일 목록</h3>
+                  <button id="btnRefreshBackups" class="btn btn-sm">새로고침</button>
+                </div>
+                <div style="max-height: 420px; overflow-y: auto;">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th>백업 파일명</th>
+                        <th>용량</th>
+                        <th>생성 일시</th>
+                        <th style="text-align: right;">관리</th>
+                      </tr>
+                    </thead>
+                    <tbody id="backupsTableBody">
+                      <tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">백업 목록을 불러오는 중...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sub Pane 5: Datapacks & Experimental Gameplay -->
+          <div id="subDatapacks" class="sub-pane">
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+              <!-- Header Card -->
+              <div class="card">
+                <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
+                  <div>
+                    <h3 class="card-title">🧪 실험적 게임플레이 (Experimental Gameplay)</h3>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">
+                      마인크래프트 공식 실험적 데이터팩을 서버 프로퍼티와 월드 데이터에 적용합니다. 적용 시 인게임 <code>/datapack list</code>에 활성화됩니다.
+                    </div>
+                  </div>
+                  <div style="display: flex; gap: 8px;">
+                    <button type="button" id="btnRefreshDatapacks" class="btn btn-secondary btn-sm">상태 새로고침</button>
+                    <button type="button" id="btnApplyExperiments" class="btn btn-primary btn-sm">선택한 실험 기능 적용하기</button>
+                  </div>
+                </div>
+
+                <!-- Experiments Checkbox List -->
+                <div id="experimentsListContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-top: 10px;">
+                  <div style="text-align: center; padding: 24px; color: var(--text-muted); grid-column: 1 / -1;">실험적 기능 목록을 불러오는 중...</div>
+                </div>
+              </div>
+
+              <!-- Datapack Status Card -->
+              <div class="card">
+                <div class="card-header">
+                  <h3 class="card-title">📋 현재 월드 데이터팩 상태</h3>
+                  <span id="datapackLiveBadge" class="badge">확인 중</span>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                  <div>
+                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">
+                      ✅ 활성화된 데이터팩 (Enabled Packs)
+                    </div>
+                    <div id="enabledPacksList" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                      <span style="color: var(--text-muted); font-size: 0.8rem;">불러오는 중...</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">
+                      ⏸️ 비활성화된 데이터팩 (Disabled Packs)
+                    </div>
+                    <div id="disabledPacksList" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                      <span style="color: var(--text-muted); font-size: 0.8rem;">없음</span>
+                    </div>
+                  </div>
+
+                  <div id="datapackRconBox" style="display: none; margin-top: 6px;">
+                    <div style="font-size: 0.775rem; color: var(--text-muted); margin-bottom: 6px;">
+                      실시간 콘솔 출력 (RCON datapack list)
+                    </div>
+                    <pre id="datapackRconText" style="margin: 0; padding: 12px; background: rgba(0,0,0,0.5); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 0.775rem; color: #a0aec0; white-space: pre-wrap;"></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Page 4: Server Console & Operations (Consolidated Console & Metrics) -->
+        <section id="consolePane" class="tab-pane">
+          <div style="display: flex; flex-direction: column; gap: 20px;">
+            
+            <!-- 1. Real-time Resource Gauges (CPU, RAM, TPS) -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+              <div class="card metric-card">
+                <div class="card-header" style="margin-bottom: 8px;">
+                  <span class="card-title" style="font-size: 0.85rem;">CPU 사용률</span>
+                  <span style="font-size: 1.1rem; color: #60a5fa;">⚡</span>
+                </div>
+                <div class="metric-val" id="metricCpuVal">0.0%</div>
+                <div class="metric-bar-wrap">
+                  <div id="metricCpuBar" class="metric-bar" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <div class="card metric-card">
+                <div class="card-header" style="margin-bottom: 8px;">
+                  <span class="card-title" style="font-size: 0.85rem;">메모리 사용량 (RSS)</span>
+                  <span style="font-size: 1.1rem; color: #c084fc;">💾</span>
+                </div>
+                <div class="metric-val" id="metricRamVal">0 MB</div>
+                <div class="metric-bar-wrap">
+                  <div id="metricRamBar" class="metric-bar" style="width: 0%; background: linear-gradient(90deg, #c084fc, #e879f9);"></div>
+                </div>
+              </div>
+
+              <div class="card metric-card">
+                <div class="card-header" style="margin-bottom: 8px;">
+                  <span class="card-title" style="font-size: 0.85rem;">서버 성능 (TPS)</span>
+                  <span style="font-size: 1.1rem; color: #4ade80;">⏱</span>
+                </div>
+                <div class="metric-val" id="metricTpsVal">20.0</div>
+                <div style="display: flex; gap: 8px; font-size: 0.75rem; color: var(--text-secondary); margin-top: 6px;">
+                  <span>1m: <strong id="metricTps1m">20.0</strong></span>
+                  <span>5m: <strong id="metricTps5m">20.0</strong></span>
+                  <span>15m: <strong id="metricTps15m">20.0</strong></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Process Telemetry & Live Telemetry Graph -->
+            <div style="display: grid; grid-template-columns: 1fr 1.6fr; gap: 20px;">
+              <div class="card">
+                <div class="card-header">
+                  <h3 class="card-title">프로세스 정보</h3>
+                  <button id="btnRefreshMetrics" class="btn btn-sm">새로고침</button>
+                </div>
+                <div class="metrics-info-grid">
+                  <div class="metrics-info-row">
+                    <span class="metrics-label">프로세스 상태</span>
+                    <span id="metricStatusText" class="badge">STOPPED</span>
+                  </div>
+                  <div class="metrics-info-row">
+                    <span class="metrics-label">Process ID (PID)</span>
+                    <span id="metricPidText" style="font-family: var(--font-mono);">-</span>
+                  </div>
+                  <div class="metrics-info-row">
+                    <span class="metrics-label">가동 시간 (Uptime)</span>
+                    <span id="metricUptimeText" style="font-family: var(--font-mono);">-</span>
+                  </div>
+                  <div class="metrics-info-row">
+                    <span class="metrics-label">온라인 플레이어</span>
+                    <span id="metricPlayersText" style="font-family: var(--font-mono);">0 / 20</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-header" style="flex-wrap: wrap; gap: 8px;">
+                  <h3 class="card-title">실시간 리소스 추이</h3>
+                  <div class="chart-legend" style="display: flex; gap: 12px; font-size: 0.75rem;">
+                    <span style="display: flex; align-items: center; gap: 4px; color: #60a5fa;"><span style="width: 10px; height: 3px; background: #60a5fa; display: inline-block; border-radius: 2px;"></span>CPU</span>
+                    <span style="display: flex; align-items: center; gap: 4px; color: #c084fc;"><span style="width: 10px; height: 3px; background: #c084fc; display: inline-block; border-radius: 2px;"></span>메모리</span>
+                    <span style="display: flex; align-items: center; gap: 4px; color: #4ade80;"><span style="width: 10px; height: 3px; background: #4ade80; display: inline-block; border-radius: 2px;"></span>TPS</span>
+                  </div>
+                </div>
+                <div style="position: relative; width: 100%; height: 180px; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-subtle); border-radius: var(--radius); overflow: hidden; margin-top: 4px;">
+                  <canvas id="metricsChartCanvas" style="width: 100%; height: 100%; display: block;"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Live Interactive Server Console -->
+            <div class="card" style="display: flex; flex-direction: column; min-height: 480px;">
+              <div class="card-header">
+                <h3 class="card-title">서버 실시간 콘솔</h3>
+                <div style="display: flex; gap: 8px;">
+                  <button id="btnQuickList" class="btn btn-sm">접속자(list)</button>
+                  <button id="btnQuickTps" class="btn btn-sm">성능(tps)</button>
+                  <button id="btnQuickSave" class="btn btn-sm">월드 저장(save-all)</button>
+                  <button id="btnClearConsole" class="btn btn-sm">화면 지우기</button>
+                </div>
+              </div>
+
+              <pre id="consoleOutput" class="console-view" style="flex: 1; height: 320px; max-height: none;">서버 로그 로딩 중...\n</pre>
+
+              <form id="consoleForm" class="console-form">
+                <div class="console-input-wrap">
+                  <input type="text" id="consoleCommand" class="input console-input" placeholder="명령어 입력 (Tab으로 자동완성, ↑↓로 이전 기록)..." autocomplete="off" spellcheck="false" required>
+                  <div id="commandSuggestions" class="command-suggestions" style="display: none;"></div>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: auto;">실행</button>
+              </form>
+            </div>
+
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Player Action Modal (Admin Interactive Player Management) -->
+  <div id="playerActionModal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="player-avatar-large">⚔</div>
+          <div>
+            <h3 class="modal-title" id="modalPlayerName">Player</h3>
+            <span class="status-meta">온라인 플레이어 관리 & 제어</span>
+          </div>
+        </div>
+        <button id="btnClosePlayerModal" class="modal-close-btn">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- 1. Direct Message (Whisper) -->
+        <div class="modal-section">
+          <label class="modal-section-title">개인 메시지 전송 (귓속말)</label>
+          <form id="playerMsgForm" style="display: flex; gap: 8px;">
+            <input type="text" id="playerMsgInput" class="input" placeholder="플레이어에게 보낼 메시지..." required style="flex: 1;">
+            <button type="submit" class="btn btn-primary btn-sm">귓속말 전송</button>
+          </form>
+        </div>
+
+        <!-- 2. Gamemode Change -->
+        <div class="modal-section">
+          <label class="modal-section-title">게임 모드 변경</label>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
+            <button type="button" class="btn btn-sm btn-gm" data-gm="survival">서바이벌</button>
+            <button type="button" class="btn btn-sm btn-gm" data-gm="creative">크리에이티브</button>
+            <button type="button" class="btn btn-sm btn-gm" data-gm="spectator">관전 모드</button>
+            <button type="button" class="btn btn-sm btn-gm" data-gm="adventure">모험 모드</button>
+          </div>
+        </div>
+
+        <!-- 3. Give Items -->
+        <div class="modal-section">
+          <label class="modal-section-title">아이템 지급</label>
+          <div style="display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-sm btn-item-preset" data-item="minecraft:diamond" data-count="64">다이아 64</button>
+            <button type="button" class="btn btn-sm btn-item-preset" data-item="minecraft:netherite_ingot" data-count="16">네더라이트 16</button>
+            <button type="button" class="btn btn-sm btn-item-preset" data-item="minecraft:golden_apple" data-count="32">황금사과 32</button>
+            <button type="button" class="btn btn-sm btn-item-preset" data-item="minecraft:totem_of_undying" data-count="1">토템 1</button>
+          </div>
+          <form id="playerGiveForm" style="display: flex; gap: 8px;">
+            <input type="text" id="playerGiveItem" class="input" placeholder="아이템 ID (예: minecraft:elytra)" required style="flex: 1;">
+            <input type="number" id="playerGiveCount" class="input" value="1" min="1" max="64" style="width: 70px; text-align: center;">
+            <button type="submit" class="btn btn-sm btn-primary">지급</button>
+          </form>
+        </div>
+
+        <!-- 4. Quick Actions -->
+        <div class="modal-section">
+          <label class="modal-section-title">빠른 액션</label>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" id="btnPlayerSpawn" class="btn btn-sm">스폰으로 이동</button>
+            <button type="button" id="btnPlayerClear" class="btn btn-sm" style="color: var(--accent);">인벤토리 비우기</button>
+            <button type="button" id="btnPlayerOp" class="btn btn-sm">OP 부여</button>
+            <button type="button" id="btnPlayerDeop" class="btn btn-sm">OP 회수</button>
+          </div>
+        </div>
+
+        <!-- 5. Kick / Ban -->
+        <div class="modal-section" style="border-bottom: none;">
+          <label class="modal-section-title" style="color: var(--status-stopped);">플레이어 징계 (추방 / 차단)</label>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="text" id="playerPunishReason" class="input" placeholder="사유 (기본: 관리자에 의해 실행됨)..." style="flex: 1;">
+            <button type="button" id="btnPlayerKick" class="btn btn-sm" style="border-color: #f59e0b; color: #f59e0b;">추방 (Kick)</button>
+            <button type="button" id="btnPlayerBan" class="btn btn-sm" style="border-color: var(--status-stopped); color: var(--status-stopped);">차단 (Ban)</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="/static/js/modules/utils.js"></script>
+  <script src="/static/js/modules/auth.js"></script>
+  <script src="/static/js/modules/nav.js"></script>
+  <script src="/static/js/modules/dashboard.js"></script>
+  <script src="/static/js/modules/whitelist.js"></script>
+  <script src="/static/js/modules/console.js"></script>
+  <script src="/static/js/modules/settings.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
