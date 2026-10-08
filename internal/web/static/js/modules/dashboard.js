@@ -66,6 +66,12 @@ async function fetchProcessStatus() {
       // Hide offline overlays
       if (dashboardOfflineCard) dashboardOfflineCard.style.display = 'none';
       if (mapOfflineOverlay) mapOfflineOverlay.style.display = 'none';
+
+      // Load map only when server is running
+      const bluemapFrame = document.getElementById('bluemapFrame');
+      if (bluemapFrame && (!bluemapFrame.src || bluemapFrame.src === 'about:blank' || bluemapFrame.src.endsWith('/about:blank'))) {
+        bluemapFrame.src = window.serverMapUrl || '/squaremap/';
+      }
     } else if (st === 'starting') {
       if (procMeta) procMeta.textContent = '기동 중...';
       if (btnStart) btnStart.disabled = true;
@@ -122,6 +128,12 @@ async function fetchProcessStatus() {
       if (btnMapStart) {
         btnMapStart.textContent = startBtnText;
         btnMapStart.disabled = false;
+      }
+
+      // Reset map iframe to about:blank when offline to prevent unnecessary background polling
+      const bluemapFrame = document.getElementById('bluemapFrame');
+      if (bluemapFrame && bluemapFrame.src && !bluemapFrame.src.endsWith('about:blank')) {
+        bluemapFrame.src = 'about:blank';
       }
     }
 

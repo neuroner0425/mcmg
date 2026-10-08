@@ -115,9 +115,19 @@ function navigateByPath(pathname, push = false) {
     if (currentUser && currentUser.role === 'admin' && typeof fetchWhitelist === 'function') {
       fetchWhitelist();
     }
-  } else if (route.target === 'dashboardPane' || route.target === 'mapPane') {
+  } else if (route.target === 'dashboardPane') {
     if (typeof fetchProcessStatus === 'function') {
       fetchProcessStatus();
+    }
+  } else if (route.target === 'mapPane') {
+    if (typeof fetchProcessStatus === 'function') {
+      fetchProcessStatus();
+    }
+    const bluemapFrame = document.getElementById('bluemapFrame');
+    if (bluemapFrame && typeof currentServerStatus !== 'undefined' && currentServerStatus === 'RUNNING') {
+      if (!bluemapFrame.src || bluemapFrame.src === 'about:blank' || bluemapFrame.src.endsWith('/about:blank')) {
+        bluemapFrame.src = window.serverMapUrl || '/squaremap/';
+      }
     }
   }
 }

@@ -77,9 +77,9 @@ function showApp(userData) {
     }
   }
 
-  const mapUrl = userData.map_url || userData.bluemap_url || '/squaremap/';
-  if (bluemapFrame) {
-    bluemapFrame.src = mapUrl;
+  window.serverMapUrl = userData.map_url || userData.bluemap_url || '/squaremap/';
+  if (bluemapFrame && typeof currentServerStatus !== 'undefined' && currentServerStatus === 'RUNNING') {
+    bluemapFrame.src = window.serverMapUrl;
   }
 
   const timeSlider = document.getElementById('timeSlider');
