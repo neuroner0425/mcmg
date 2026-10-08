@@ -798,6 +798,17 @@ function initSettings() {
   if (btnRefreshDatapacks) {
     btnRefreshDatapacks.addEventListener('click', fetchDatapacks);
   }
+
+  // Zero-Downtime System Update
+  const btnCheckUpdate = document.getElementById('btnCheckUpdate');
+  if (btnCheckUpdate) {
+    btnCheckUpdate.addEventListener('click', () => checkSystemUpdate(true));
+  }
+
+  const btnApplyUpdate = document.getElementById('btnApplyUpdate');
+  if (btnApplyUpdate) {
+    btnApplyUpdate.addEventListener('click', handleApplySystemUpdate);
+  }
 }
 
 // Datapacks & Experimental Gameplay Module
@@ -953,3 +964,171 @@ async function handleApplyExperiments() {
     }
   }
 }
+
+// Zero-Downtime System Update Module
+let updateCheckData = null;
+
+async function checkSystemUpdate(manual = false) {
+  if (!currentUser || currentUser.role !== 'admin') return;
+
+  const btnCheck = document.getElementById('btnCheckUpdate');
+  const btnApply = document.getElementById('btnApplyUpdate');
+  const badge = document.getElementById('updateStatusBadge');
+  const detailsCard = document.getElementById('updateDetailsCard');
+  const currentHashEl = document.getElementById('currentCommitHash');
+  const branchEl = document.getElementById('currentBranchName');
+  const checkTimeEl = document.getElementById('lastCheckTime');
+
+  if (btnCheck) {
+    btnCheck.disabled = true;
+    btnCheck.innerHTML = '<span>⏳</span> 확인 중...';
+  }
+
+  try {
+    const res = await fetch('/api/admin/system/update/check');
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || '업데이트 확인 실패');
+    }
+    const data = await res.json();
+    updateCheckData = data;
+
+    if (currentHashEl) currentHashEl.textContent = data.current_commit;
+    if (branchEl) branchEl.textContent = data.branch;
+    if (checkTimeEl) checkTimeEl.textContent = data.checked_at;
+
+    if (data.has_update) {
+      if (badge) {
+        badge.className = 'badge badge-warning';
+        badge.textContent = `신규 업데이트 발견 (${data.pending_commits.length}개 커밋)`;
+      }
+      if (btnCheck) {
+        btnCheck.style.display = 'none';
+      }
+      if (btnApply) {
+        btnApply.style.display = 'inline-flex';
+        btnApply.innerHTML = `<span>🚀</span> 지금 업데이트 적용 (${data.latest_commit})`;
+      }
+      if (detailsCard) {
+        detailsCard.style.display = 'block';
+        const msgEl = document.getElementById('updateLatestMessage');
+        const listEl = document.getElementById('pendingCommitsList');
+        if (msgEl) msgEl.textContent = data.latest_message;
+        if (listEl) {
+          listEl.innerHTML = data.pending_commits.map(c => `<li style="padding: 6px 10px; background: rgba(0,0,0,0.25); border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); font-family: monospace; font-size: 0.85rem; color: #e2e8f0;">${escapeHtml(c)}</li>`).join('');
+        }
+      }
+      if (manual) {
+        showToast(`새로운 업데이트가 발견되었습니다! (${data.pending_commits.length}개 커밋)`);
+      }
+    } else {
+      if (badge) {
+        badge.className = 'badge badge-enabled';
+        badge.textContent = '최신 버전입니다';
+      }
+      if (btnCheck) {
+        btnCheck.style.display = 'inline-flex';
+        btnCheck.innerHTML = '<span>🔍</span> 업데이트 확인';
+      }
+      if (btnApply) {
+        btnApply.style.display = 'none';
+      }
+      if (detailsCard) {
+        detailsCard.style.display = 'none';
+      }
+      if (manual) {
+        showToast('현재 최신 버전입니다.');
+      }
+    }
+  } catch (err) {
+    if (manual) showToast(err.message, 'error');
+  } finally {
+    if (btnCheck) {
+      btnCheck.disabled = false;
+      if (!updateCheckData || !updateCheckData.has_update) {
+        btnCheck.innerHTML = '<span>🔍</span> 업데이트 확인';
+      }
+    }
+  }
+}
+
+async function handleApplySystemUpdate() {
+  if (!currentUser || currentUser.role !== 'admin') return;
+
+  const confirmed = confirm(
+    '실행 중인 마인크래프트 서버는 중단 없이 그대로 유지됩니다!\n\n' +
+    'git pull 및 새 바이너리 컴파일 후 웹 매니저가 무중단 재기동됩니다. 계속 진행하시겠습니까?'
+  );
+  if (!confirmed) return;
+
+  const btnApply = document.getElementById('btnApplyUpdate');
+  if (btnApply) {
+    btnApply.disabled = true;
+    btnApply.innerHTML = '<span>⏳</span> 업데이트 빌드 중...';
+  }
+
+  showToast('무중단 업데이트 적용 시작: Git Pull 및 컴파일 진행 중...', 'info');
+
+  try {
+    const res = await fetch('/api/admin/system/update/apply', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || '업데이트 적용 실패', 'error');
+      if (btnApply) {
+        btnApply.disabled = false;
+        btnApply.innerHTML = '<span>🚀</span> 업데이트 재시도';
+      }
+      return;
+    }
+
+    showToast(data.message, 'success');
+
+    // Show reloading modal overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'updateReloadOverlay';
+    overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: #fff; text-align: center; backdrop-filter: blur(8px);';
+    overlay.innerHTML = `
+      <div class="spinner" style="width: 48px; height: 48px; border: 4px solid rgba(255,255,255,0.2); border-top-color: #8b5cf6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+      <h2 style="font-size: 1.5rem; font-weight: 700; margin: 0;">웹 매니저 무중단 재기동 중</h2>
+      <p style="color: var(--text-secondary); max-width: 420px; margin: 0; font-size: 0.95rem;">
+        마인크래프트 서버는 중단 없이 계속 실행 중입니다.<br>새 매니저가 기동되면 자동으로 연결을 복구합니다...
+      </p>
+      <div id="reconnectAttempts" style="font-size: 0.8rem; color: var(--text-muted);">재연결 확인 중...</div>
+    `;
+    document.body.appendChild(overlay);
+
+    // Poll until the server comes back up
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts++;
+      const attemptEl = document.getElementById('reconnectAttempts');
+      if (attemptEl) attemptEl.textContent = `재연결 시도 중 (${attempts}회)...`;
+
+      try {
+        const pingRes = await fetch('/api/public/status', { cache: 'no-store' });
+        if (pingRes.ok) {
+          clearInterval(interval);
+          if (attemptEl) attemptEl.textContent = '연결 복원 완료! 새로고침합니다...';
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
+        }
+      } catch (e) {
+        // still reloading
+      }
+
+      if (attempts > 30) {
+        clearInterval(interval);
+        if (attemptEl) attemptEl.textContent = '재연결 시간이 초과되었습니다. 페이지를 새로고침해주세요.';
+      }
+    }, 1500);
+
+  } catch (err) {
+    showToast('업데이트 요청 중 오류가 발생했습니다: ' + err.message, 'error');
+    if (btnApply) {
+      btnApply.disabled = false;
+      btnApply.innerHTML = '<span>🚀</span> 업데이트 재시도';
+    }
+  }
+}
+

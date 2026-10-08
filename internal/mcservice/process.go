@@ -2,10 +2,12 @@ package mcservice
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,21 +43,33 @@ type ProcessStatusInfo struct {
 
 // ProcessManager coordinates the Java child process lifecycle.
 type ProcessManager struct {
-	serverDir string
-	jarName   string
-	javaPath  string
-	minMemory string
-	maxMemory string
-	rcon      RCONClient
-	chatSvc   *ChatService
+	serverDir    string
+	jarName      string
+	javaPath     string
+	minMemory    string
+	maxMemory    string
+	rconPassword string
+	rconPort     int
+	rcon         RCONClient
+	chatSvc      *ChatService
 
-	mu        sync.Mutex
-	cmd       *exec.Cmd
-	stdin     io.WriteCloser
-	status    string
-	startedAt time.Time
-	logs      []string
-	onLog     func(string)
+	mu         sync.Mutex
+	cmd        *exec.Cmd
+	adoptedPID int
+	stdin      io.WriteCloser
+	status     string
+	startedAt  time.Time
+	logs       []string
+	onLog      func(string)
+	tailCancel context.CancelFunc
+}
+
+// SetRconConfig configures the RCON password and port for server.properties synchronization.
+func (pm *ProcessManager) SetRconConfig(password string, port int) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	pm.rconPassword = password
+	pm.rconPort = port
 }
 
 // SetOnLogListener registers a callback invoked on each incoming clean log line.
@@ -79,6 +93,8 @@ func NewProcessManager(serverDir, jarName, javaPath, minMemory, maxMemory string
 		logs:      make([]string, 0, maxLogBuffer),
 	}
 	pm.preloadExistingLogs()
+	// Zero-downtime: Adopt any existing running server process on startup
+	pm.AdoptRunningServer()
 	return pm
 }
 
@@ -159,6 +175,118 @@ func (pm *ProcessManager) GetLogs(limit int) []string {
 	return result
 }
 
+// isProcessAlive checks whether a process with the given PID is currently running.
+func isProcessAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	return p.Signal(syscall.Signal(0)) == nil
+}
+
+// AdoptRunningServer inspects the OS for an existing Minecraft server process,
+// adopting it into the manager's supervision without interruption.
+func (pm *ProcessManager) AdoptRunningServer() bool {
+	pm.mu.Lock()
+	if pm.status == StatusRunning || pm.status == StatusStarting {
+		pm.mu.Unlock()
+		return true
+	}
+
+	pid := findRunningServerPID(pm.jarName)
+	if pid <= 0 {
+		pm.mu.Unlock()
+		return false
+	}
+
+	pm.adoptedPID = pid
+	pm.status = StatusRunning
+	pm.startedAt = time.Now()
+	pm.mu.Unlock()
+
+	pm.appendLog(fmt.Sprintf("[Manager] Existing Minecraft server detected (PID: %d). Adopted for zero-downtime supervision.", pid))
+	pm.startLogTailer()
+
+	// Watch adopted process for termination in background
+	go func(targetPID int) {
+		for {
+			time.Sleep(1 * time.Second)
+			if !isProcessAlive(targetPID) {
+				pm.mu.Lock()
+				if pm.adoptedPID == targetPID {
+					pm.status = StatusStopped
+					pm.adoptedPID = 0
+					if pm.tailCancel != nil {
+						pm.tailCancel()
+						pm.tailCancel = nil
+					}
+				}
+				pm.mu.Unlock()
+				pm.appendLog(fmt.Sprintf("[Manager] Adopted Minecraft server process (PID: %d) exited.", targetPID))
+				break
+			}
+		}
+	}(pid)
+
+	return true
+}
+
+func (pm *ProcessManager) startLogTailer() {
+	pm.mu.Lock()
+	if pm.tailCancel != nil {
+		pm.tailCancel()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	pm.tailCancel = cancel
+	pm.mu.Unlock()
+
+	logPath := filepath.Join(pm.serverDir, "logs", "latest.log")
+	go func() {
+		file, err := os.Open(logPath)
+		if err != nil {
+			return
+		}
+		defer file.Close()
+
+		// Seek to end so we only stream new lines
+		offset, _ := file.Seek(0, io.SeekEnd)
+		reader := bufio.NewReader(file)
+
+		ticker := time.NewTicker(300 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				stat, err := os.Stat(logPath)
+				if err != nil {
+					continue
+				}
+				if stat.Size() < offset {
+					// Log file was rotated or truncated
+					offset, _ = file.Seek(0, io.SeekStart)
+					reader.Reset(file)
+				}
+				for {
+					line, err := reader.ReadString('\n')
+					if len(line) > 0 {
+						pm.appendLog(strings.TrimRight(line, "\r\n"))
+					}
+					if err != nil {
+						break
+					}
+				}
+				offset, _ = file.Seek(0, io.SeekCurrent)
+			}
+		}
+	}()
+}
+
 // GetStatus returns the current status.
 func (pm *ProcessManager) GetStatus() ProcessStatusInfo {
 	pm.mu.Lock()
@@ -171,6 +299,15 @@ func (pm *ProcessManager) GetStatus() ProcessStatusInfo {
 	if pm.cmd != nil && pm.cmd.Process != nil && (pm.status == StatusRunning || pm.status == StatusStarting) {
 		uptime = int64(time.Since(pm.startedAt).Seconds())
 		pid = pm.cmd.Process.Pid
+	} else if pm.adoptedPID > 0 && (pm.status == StatusRunning || pm.status == StatusStarting) {
+		if isProcessAlive(pm.adoptedPID) {
+			pid = pm.adoptedPID
+			uptime = int64(time.Since(pm.startedAt).Seconds())
+		} else {
+			pm.status = StatusStopped
+			pm.adoptedPID = 0
+			status = StatusStopped
+		}
 	} else if pm.status == StatusStopped {
 		if orphanPID := findRunningServerPID(pm.jarName); orphanPID > 0 {
 			pid = orphanPID
@@ -197,24 +334,23 @@ func (pm *ProcessManager) Start() error {
 		return errors.New("server process is already running or starting")
 	}
 
+	// Zero-downtime check: If a server targeting this jar is already alive, adopt it instead of killing
+	if strayPID := findRunningServerPID(pm.jarName); strayPID > 0 {
+		pm.mu.Unlock()
+		if pm.AdoptRunningServer() {
+			return nil
+		}
+		pm.mu.Lock()
+	}
+
 	jarPath := filepath.Join(pm.serverDir, pm.jarName)
 	if !fileExists(jarPath) {
 		pm.mu.Unlock()
 		return fmt.Errorf("server jar not found at %s: please download Purpur first", jarPath)
 	}
 
-	// Clean up any stray/orphaned Java server process targeting this jar before starting a new one
-	if strayPID := findRunningServerPID(pm.jarName); strayPID > 0 {
-		pm.appendLog(fmt.Sprintf("[Manager] Cleaning up stray server process (PID: %d) before start...", strayPID))
-		if p, err := os.FindProcess(strayPID); err == nil {
-			_ = p.Signal(syscall.SIGTERM)
-			time.Sleep(1 * time.Second)
-			_ = p.Kill()
-		}
-	}
-
 	// Auto-ensure server properties, dimension structure links, and BlueMap configs
-	EnsureServerProperties(pm.serverDir)
+	EnsureServerProperties(pm.serverDir, pm.rconPassword, pm.rconPort)
 	EnsureWorldStructure(pm.serverDir)
 	EnsureBlueMapConfig(pm.serverDir)
 	_ = EnsureSquaremapConfig(pm.serverDir, 8100)
@@ -232,6 +368,10 @@ func (pm *ProcessManager) Start() error {
 
 	cmd := exec.Command(pm.javaPath, args...)
 	cmd.Dir = pm.serverDir
+	// Setsid isolates the Java server into its own session so it survives manager shutdowns
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
 
 	stdinPipe, err := cmd.StdinPipe()
 	if err != nil {
@@ -281,6 +421,10 @@ func (pm *ProcessManager) Start() error {
 		pm.status = StatusStopped
 		pm.cmd = nil
 		pm.stdin = nil
+		if pm.tailCancel != nil {
+			pm.tailCancel()
+			pm.tailCancel = nil
+		}
 		pm.mu.Unlock()
 		pm.appendLog("[Manager] Server process exited.")
 	}()
@@ -291,10 +435,14 @@ func (pm *ProcessManager) Start() error {
 // Stop initiates a graceful shutdown using RCON stop and stdin fallback.
 func (pm *ProcessManager) Stop() error {
 	pm.mu.Lock()
-	orphanPID := 0
+	targetPID := 0
 	if pm.cmd == nil {
-		orphanPID = findRunningServerPID(pm.jarName)
-		if orphanPID == 0 {
+		if pm.adoptedPID > 0 {
+			targetPID = pm.adoptedPID
+		} else {
+			targetPID = findRunningServerPID(pm.jarName)
+		}
+		if targetPID == 0 {
 			pm.mu.Unlock()
 			return errors.New("server is not running")
 		}
@@ -306,6 +454,10 @@ func (pm *ProcessManager) Stop() error {
 	pm.status = StatusStopping
 	cmd := pm.cmd
 	stdin := pm.stdin
+	if pm.tailCancel != nil {
+		pm.tailCancel()
+		pm.tailCancel = nil
+	}
 	pm.mu.Unlock()
 
 	pm.appendLog("[Manager] Initiating graceful server stop...")
@@ -317,25 +469,30 @@ func (pm *ProcessManager) Stop() error {
 		}
 	}()
 
-	// 2. Also write "stop\n" to process stdin in case RCON is disconnected or disabled
+	// 2. Also write "stop\n" to process stdin if pipe is open
 	if stdin != nil {
 		_, _ = stdin.Write([]byte("stop\n"))
 	}
 
 	// 3. Monitor termination in background with phased SIGTERM / SIGKILL fallback
 	go func() {
-		if orphanPID > 0 {
-			p, err := os.FindProcess(orphanPID)
+		if targetPID > 0 && (cmd == nil || cmd.Process == nil) {
+			p, err := os.FindProcess(targetPID)
 			if err == nil {
-				time.Sleep(2 * time.Second)
-				_ = p.Signal(syscall.SIGTERM)
-				time.Sleep(2 * time.Second)
-				_ = p.Kill()
+				time.Sleep(3 * time.Second)
+				if isProcessAlive(targetPID) {
+					_ = p.Signal(syscall.SIGTERM)
+					time.Sleep(2 * time.Second)
+					if isProcessAlive(targetPID) {
+						_ = p.Kill()
+					}
+				}
 			}
 			pm.mu.Lock()
 			pm.status = StatusStopped
+			pm.adoptedPID = 0
 			pm.mu.Unlock()
-			pm.appendLog(fmt.Sprintf("[Manager] Orphaned server process (PID: %d) terminated.", orphanPID))
+			pm.appendLog(fmt.Sprintf("[Manager] Server process (PID: %d) stopped.", targetPID))
 			return
 		}
 
@@ -421,21 +578,41 @@ func (pm *ProcessManager) WriteStdin(cmd string) error {
 	return err
 }
 
-// EnsureServerProperties guarantees that server.properties enables RCON and disables secure profile enforcement for in-game chat.
-func EnsureServerProperties(serverDir string) {
+// ParseRconPort extracts the port number from an address string (e.g. "127.0.0.1:25575").
+// Defaults to 25575 if invalid or unspecified.
+func ParseRconPort(address string) int {
+	_, portStr, err := net.SplitHostPort(strings.TrimSpace(address))
+	if err == nil {
+		if p, err := strconv.Atoi(portStr); err == nil && p > 0 {
+			return p
+		}
+	}
+	return 25575
+}
+
+// EnsureServerProperties guarantees that server.properties enables RCON with the configured credentials,
+// and disables secure profile enforcement for in-game chat.
+func EnsureServerProperties(serverDir, rconPassword string, rconPort int) {
+	if rconPassword == "" {
+		rconPassword = "rcon_password"
+	}
+	if rconPort <= 0 {
+		rconPort = 25575
+	}
+
 	propPath := filepath.Join(serverDir, "server.properties")
 	data, err := os.ReadFile(propPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Pre-seed server.properties so RCON, Whitelist, and unauthenticated chat work out of the box
-			preseed := `# Minecraft server properties pre-seeded by Sanctum Manager
+			preseed := fmt.Sprintf(`# Minecraft server properties pre-seeded by Sanctum Manager
 enable-rcon=true
-rcon.port=25575
-rcon.password=rcon_password
+rcon.port=%d
+rcon.password=%s
 white-list=true
 enforce-whitelist=true
 enforce-secure-profile=false
-`
+`, rconPort, rconPassword)
 			_ = os.WriteFile(propPath, []byte(preseed), 0644)
 		}
 		return
@@ -455,10 +632,10 @@ enforce-secure-profile=false
 			lines[i] = "enable-rcon=true"
 			hasRconEnable = true
 		} else if strings.HasPrefix(trimmed, "rcon.port=") {
-			lines[i] = "rcon.port=25575"
+			lines[i] = fmt.Sprintf("rcon.port=%d", rconPort)
 			hasRconPort = true
 		} else if strings.HasPrefix(trimmed, "rcon.password=") {
-			lines[i] = "rcon.password=rcon_password"
+			lines[i] = fmt.Sprintf("rcon.password=%s", rconPassword)
 			hasRconPass = true
 		} else if strings.HasPrefix(trimmed, "enforce-whitelist=") {
 			lines[i] = "enforce-whitelist=true"
@@ -473,10 +650,10 @@ enforce-secure-profile=false
 		lines = append(lines, "enable-rcon=true")
 	}
 	if !hasRconPort {
-		lines = append(lines, "rcon.port=25575")
+		lines = append(lines, fmt.Sprintf("rcon.port=%d", rconPort))
 	}
 	if !hasRconPass {
-		lines = append(lines, "rcon.password=rcon_password")
+		lines = append(lines, fmt.Sprintf("rcon.password=%s", rconPassword))
 	}
 	if !hasEnforceWhitelist {
 		lines = append(lines, "enforce-whitelist=true")

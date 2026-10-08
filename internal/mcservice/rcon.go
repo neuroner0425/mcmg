@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -22,10 +23,11 @@ type RCONClient interface {
 
 // Service manages RCON interactions.
 type Service struct {
-	address  string
-	password string
-	mu       sync.Mutex
-	conn     *rcon.Conn
+	address    string
+	password   string
+	mu         sync.Mutex
+	conn       *rcon.Conn
+	lastErrLog time.Time
 }
 
 // NewService initializes a new RCON-based Minecraft service.
@@ -33,6 +35,14 @@ func NewService(address, password string) *Service {
 	return &Service{
 		address:  address,
 		password: password,
+	}
+}
+
+func (s *Service) logError(format string, v ...interface{}) {
+	now := time.Now()
+	if now.Sub(s.lastErrLog) > 15*time.Second {
+		log.Printf("[RCON] "+format, v...)
+		s.lastErrLog = now
 	}
 }
 
@@ -44,6 +54,7 @@ func (s *Service) getConn() (*rcon.Conn, error) {
 
 	conn, err := rcon.Dial(s.address, s.password, rcon.SetDialTimeout(3*time.Second))
 	if err != nil {
+		s.logError("failed to connect to RCON (%s): %v", s.address, err)
 		return nil, fmt.Errorf("failed to connect to RCON (%s): %w", s.address, err)
 	}
 
@@ -71,6 +82,7 @@ func (s *Service) Execute(command string) (string, error) {
 
 	res, err := conn.Execute(command)
 	if err != nil {
+		s.logError("command %q failed, attempting reconnect: %v", command, err)
 		// Attempt reconnect once upon network failure
 		s.closeConn()
 		conn, err = s.getConn()
@@ -80,6 +92,7 @@ func (s *Service) Execute(command string) (string, error) {
 		res, err = conn.Execute(command)
 		if err != nil {
 			s.closeConn()
+			s.logError("command %q failed again after reconnect: %v", command, err)
 			return "", fmt.Errorf("command execution failed: %w", err)
 		}
 	}

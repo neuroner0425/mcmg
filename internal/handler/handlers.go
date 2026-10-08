@@ -23,10 +23,11 @@ type Handler struct {
 	chatSvc    *mcservice.ChatService
 	metricsSvc *mcservice.MetricsService
 	playerMgmt *mcservice.PlayerMgmtService
-	backupMgr  *mcservice.BackupManager
+	backupMgr   *mcservice.BackupManager
 	datapackMgr *mcservice.DatapackManager
-	wsHub      *mcservice.WSHub
-	blueMapURL *url.URL
+	updater     *mcservice.Updater
+	wsHub       *mcservice.WSHub
+	blueMapURL  *url.URL
 }
 
 // NewHandler constructs a new Handler instance.
@@ -62,6 +63,7 @@ func NewHandler(
 		playerMgmt:  playerMgmt,
 		backupMgr:   backupMgr,
 		datapackMgr: mcservice.NewDatapackManager(cfg.MC.ServerDir),
+		updater:     mcservice.NewUpdater("."),
 		wsHub:       wsHub,
 		blueMapURL:  bmURL,
 	}, nil

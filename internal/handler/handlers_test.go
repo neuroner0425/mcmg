@@ -188,3 +188,29 @@ func TestHandler_SendChatAndLiveSync(t *testing.T) {
 		t.Errorf("expected 1 chat message synced, got %+v", res["messages"])
 	}
 }
+
+func TestCheckSystemUpdate(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockClient := &mockRCONClient{}
+	h, _ := setupTestHandler(t, mockClient)
+
+	router := gin.New()
+	router.GET("/admin/system/update/check", h.CheckSystemUpdate)
+
+	req, _ := http.NewRequest(http.MethodGet, "/admin/system/update/check", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", w.Code)
+	}
+
+	var info mcservice.UpdateInfo
+	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil {
+		t.Fatalf("failed to parse json response: %v", err)
+	}
+
+	if info.CurrentCommit == "" {
+		t.Errorf("expected current_commit to be populated")
+	}
+}

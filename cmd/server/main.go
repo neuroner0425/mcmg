@@ -64,6 +64,9 @@ func main() {
 		mcSvc,
 		chatSvc,
 	)
+	rconPort := mcservice.ParseRconPort(cfg.MC.RconAddress)
+	procMgr.SetRconConfig(cfg.MC.RconPassword, rconPort)
+	mcservice.EnsureServerProperties(cfg.MC.ServerDir, cfg.MC.RconPassword, rconPort)
 	pluginMgr := mcservice.NewPluginManager(cfg.MC.ServerDir)
 	metricsSvc := mcservice.NewMetricsService(cfg.MC.ServerDir, procMgr, mcSvc, propMgr)
 	playerMgmt := mcservice.NewPlayerMgmtService(cfg.MC.ServerDir, mcSvc, propMgr)
@@ -168,6 +171,10 @@ func main() {
 			adminGroup.POST("/admin/backups/create", h.CreateBackup)
 			adminGroup.DELETE("/admin/backups/:filename", h.DeleteBackup)
 			adminGroup.GET("/admin/backups/download/:filename", h.DownloadBackup)
+
+			// Zero-Downtime System Update (Admin Only)
+			adminGroup.GET("/admin/system/update/check", h.CheckSystemUpdate)
+			adminGroup.POST("/admin/system/update/apply", h.ApplySystemUpdate)
 		}
 	}
 
@@ -208,8 +215,9 @@ func main() {
 	<-quit
 	log.Println("Received termination signal, shutting down gracefully...")
 
-	// Stop Minecraft server process if running
-	_ = procMgr.Stop()
+	// Zero-Downtime architecture: Do NOT stop Minecraft server on web manager shutdown.
+	// The Minecraft server will remain running in background and be adopted on restart.
+	log.Println("[OPERATIONAL] Web Manager HTTP service stopped (Minecraft server process remains active).")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

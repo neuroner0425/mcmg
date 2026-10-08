@@ -33,6 +33,8 @@ function switchSubTab(subId) {
     if (typeof fetchBackups === 'function') fetchBackups();
   } else if (subId === 'subDatapacks') {
     if (typeof fetchDatapacks === 'function') fetchDatapacks();
+  } else if (subId === 'subUpdate') {
+    if (typeof checkSystemUpdate === 'function') checkSystemUpdate(false);
   }
 }
 
@@ -52,7 +54,8 @@ const ROUTE_MAP = {
   '/admin/datapacks': { target: 'settingsPane', path: '/admin/settings', sub: 'subDatapacks', adminOnly: true },
   '/admin/plugins': { target: 'settingsPane', path: '/admin/settings', sub: 'subPlugins', adminOnly: true },
   '/admin/installer': { target: 'settingsPane', path: '/admin/settings', sub: 'subInstaller', adminOnly: true },
-  '/admin/backups': { target: 'settingsPane', path: '/admin/settings', sub: 'subBackups', adminOnly: true }
+  '/admin/backups': { target: 'settingsPane', path: '/admin/settings', sub: 'subBackups', adminOnly: true },
+  '/admin/update': { target: 'settingsPane', path: '/admin/settings', sub: 'subUpdate', adminOnly: true }
 };
 
 function navigateByPath(pathname, push = false) {

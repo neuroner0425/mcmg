@@ -327,6 +327,9 @@
             <button type="button" class="sub-nav-item" data-sub="subBackups">
               <span>💾</span> 월드 백업 & 복원
             </button>
+            <button type="button" class="sub-nav-item" data-sub="subUpdate">
+              <span>🔄</span> 시스템 업데이트
+            </button>
           </div>
 
           <!-- Sub Pane 1: Server Config -->
@@ -625,6 +628,66 @@
                     </div>
                     <pre id="datapackRconText" style="margin: 0; padding: 12px; background: rgba(0,0,0,0.5); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 0.775rem; color: #a0aec0; white-space: pre-wrap;"></pre>
                   </div>
+                </div>
+              </div>
+          </div>
+
+          <!-- Sub Pane 6: Zero-Downtime System Update -->
+          <div id="subUpdate" class="sub-pane">
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+              <div class="card">
+                <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
+                  <div>
+                    <h3 class="card-title">🔄 시스템 버전 및 무중단 업데이트</h3>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">
+                      원격 Git 리포지토리의 최신 코드를 확인하고, <strong>마인크래프트 서버 중단 없이</strong> 웹 매니저를 최신 버전으로 자동 빌드 및 교체 재실행합니다.
+                    </div>
+                  </div>
+                  <div style="display: flex; gap: 8px; align-items: center;">
+                    <span id="updateStatusBadge" class="badge">확인 전</span>
+                    <button type="button" id="btnCheckUpdate" class="btn btn-secondary btn-sm">
+                      <span>🔍</span> 업데이트 확인
+                    </button>
+                    <button type="button" id="btnApplyUpdate" class="btn btn-primary btn-sm" style="display: none; background: linear-gradient(135deg, #7c3aed, #2563eb); font-weight: 600;">
+                      <span>🚀</span> 지금 업데이트 적용
+                    </button>
+                  </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 10px;">
+                  <div style="padding: 12px 16px; background: rgba(0,0,0,0.25); border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">현재 브랜치</div>
+                    <div id="currentBranchName" style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary);">-</div>
+                  </div>
+                  <div style="padding: 12px 16px; background: rgba(0,0,0,0.25); border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">현재 커밋 해시</div>
+                    <code id="currentCommitHash" style="font-size: 0.95rem; font-weight: 600; color: #a78bfa;">-</code>
+                  </div>
+                  <div style="padding: 12px 16px; background: rgba(0,0,0,0.25); border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">마지막 확인 일시</div>
+                    <div id="lastCheckTime" style="font-size: 0.95rem; color: var(--text-secondary);">-</div>
+                  </div>
+                  <div style="padding: 12px 16px; background: rgba(0,0,0,0.25); border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">무중단 아키텍처</div>
+                    <div style="font-size: 0.95rem; font-weight: 600; color: #10b981;">독립 세션 (Zero-Downtime)</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pending Updates Details Card -->
+              <div id="updateDetailsCard" class="card" style="display: none; border-color: rgba(139, 92, 246, 0.4);">
+                <div class="card-header">
+                  <div>
+                    <h3 class="card-title" style="color: #c4b5fd;">✨ 신규 업데이트 상세 내역</h3>
+                    <div id="updateLatestMessage" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;"></div>
+                  </div>
+                </div>
+                <div style="margin-top: 8px;">
+                  <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 6px;">대기 중인 커밋 목록:</div>
+                  <ul id="pendingCommitsList" style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px;"></ul>
+                </div>
+                <div style="margin-top: 16px; padding: 12px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 6px; font-size: 0.8rem; color: #a7f3d0;">
+                  💡 <strong>안내:</strong> 업데이트가 진행되는 동안에도 플레이어의 마인크래프트 게임 접속은 전혀 끊기지 않습니다. 새 매니저가 기동되는 즉시 실행 중인 마인크래프트 서버를 자동으로 이어받습니다.
                 </div>
               </div>
             </div>
