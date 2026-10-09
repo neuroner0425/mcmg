@@ -12,8 +12,18 @@ type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Security SecurityConfig `yaml:"security"`
 	MC       MCConfig       `yaml:"mc"`
-	Data     DataConfig     `yaml:"data"`
-	BlueMap  BlueMapConfig  `yaml:"bluemap"`
+	Data      DataConfig      `yaml:"data"`
+	BlueMap   BlueMapConfig   `yaml:"bluemap"`
+	AutoSleep AutoSleepConfig `yaml:"auto_sleep"`
+}
+
+// AutoSleepConfig holds settings for sleep proxy and idle auto-shutdown.
+type AutoSleepConfig struct {
+	Enabled            bool   `yaml:"enabled"`
+	Port               int    `yaml:"port"`
+	IdleTimeoutMinutes int    `yaml:"idle_timeout_minutes"`
+	WakeMOTD           string `yaml:"wake_motd"`
+	WakeMessage        string `yaml:"wake_message"`
 }
 
 // ServerConfig holds web server settings.
@@ -85,7 +95,7 @@ func Load(path string) (*Config, error) {
 			ServerDir:      "./server",
 			JarName:        "purpur.jar",
 			JavaPath:       "java",
-			MinMemory:      "2G",
+			MinMemory:      "512M",
 			MaxMemory:      "4G",
 		},
 		Data: DataConfig{
@@ -93,6 +103,13 @@ func Load(path string) (*Config, error) {
 		},
 		BlueMap: BlueMapConfig{
 			URL: "http://127.0.0.1:8100",
+		},
+		AutoSleep: AutoSleepConfig{
+			Enabled:            true,
+			Port:               25565,
+			IdleTimeoutMinutes: 10,
+			WakeMOTD:           "§6[Sanctum Server] §e절전 모드 대기 중\n§a접속 시 자동으로 서버가 켜집니다",
+			WakeMessage:        "§6[Sanctum Server]§r\n\n§e서버가 절전 모드에서 기동 중입니다! (약 8초 소요)\n§a잠시 후 다시 접속해주세요.",
 		},
 	}
 

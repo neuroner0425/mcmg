@@ -77,6 +77,11 @@ func main() {
 	backupMgr := mcservice.NewBackupManager(cfg.MC.ServerDir, cfg.Data.BackupDir, mcSvc, procMgr)
 	wsHub := mcservice.NewWSHub(procMgr, chatSvc, metricsSvc, mcSvc)
 
+	procMgr.SetAutoSleepEnabled(cfg.AutoSleep.Enabled)
+	sleepProxy := mcservice.NewSleepProxy(cfg.AutoSleep, procMgr, metricsSvc)
+	sleepProxy.Start()
+	defer sleepProxy.Stop()
+
 	h, err := handler.NewHandler(cfg, mcSvc, propMgr, purpurMgr, procMgr, installer, pluginMgr, chatSvc, metricsSvc, playerMgmt, backupMgr, wsHub)
 	if err != nil {
 		log.Fatalf("Failed to initialize handler: %v", err)

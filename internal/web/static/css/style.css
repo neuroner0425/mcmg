@@ -436,11 +436,20 @@ h1, h2, h3, h4 {
   background: var(--status-transition);
 }
 
+.status-dot.sleeping {
+  background: #60a5fa;
+  box-shadow: 0 0 8px rgba(96, 165, 250, 0.6);
+}
+
 .status-text {
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.status-text.sleeping {
+  color: #60a5fa;
 }
 
 .status-meta {

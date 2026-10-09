@@ -48,12 +48,19 @@ async function fetchProcessStatus() {
     const isAdmin = currentUser && currentUser.role === 'admin';
     const startBtnText = isAdmin ? '서버 시작하기.' : '서버 시작 요청하기.';
 
+    const isSleeping = (st === 'stopped' && data.auto_sleep_enabled);
+
     if (procBadge) {
-      procBadge.textContent = st.toUpperCase();
-      procBadge.className = `status-text ${st}`;
+      if (isSleeping) {
+        procBadge.textContent = 'SLEEPING';
+        procBadge.className = 'status-text sleeping';
+      } else {
+        procBadge.textContent = st.toUpperCase();
+        procBadge.className = `status-text ${st}`;
+      }
     }
     if (soulOrb) {
-      soulOrb.className = `status-dot ${st}`;
+      soulOrb.className = `status-dot ${isSleeping ? 'sleeping' : st}`;
     }
 
     if (st === 'running') {
@@ -110,25 +117,30 @@ async function fetchProcessStatus() {
         btnMapStart.disabled = true;
       }
     } else {
-      // Stopped / Offline
-      if (procMeta) procMeta.textContent = '오프라인';
+      // Stopped / Offline / Sleeping
+      if (isSleeping) {
+        if (procMeta) procMeta.textContent = '절전 모드 (접속 시 자동 기동)';
+        if (dashboardOfflineTitle) dashboardOfflineTitle.textContent = '서버가 절전 모드(0MB)로 대기 중입니다.';
+        if (mapOfflineTitle) mapOfflineTitle.textContent = '서버가 절전 모드입니다. 플레이어가 접속하면 자동으로 켜집니다.';
+        const sleepBtnText = isAdmin ? '⚡ 서버 깨우기 (시작)' : '⚡ 서버 깨우기 요청';
+        if (btnDashboardStart) btnDashboardStart.textContent = sleepBtnText;
+        if (btnMapStart) btnMapStart.textContent = sleepBtnText;
+      } else {
+        if (procMeta) procMeta.textContent = '오프라인';
+        if (dashboardOfflineTitle) dashboardOfflineTitle.textContent = '서버가 종료되어 있습니다.';
+        if (mapOfflineTitle) mapOfflineTitle.textContent = '지도에 서버가 종료되어 있습니다.';
+        if (btnDashboardStart) btnDashboardStart.textContent = startBtnText;
+        if (btnMapStart) btnMapStart.textContent = startBtnText;
+      }
       if (btnStart) btnStart.disabled = false;
       if (btnStop) btnStop.disabled = true;
       if (btnRestart) btnRestart.disabled = true;
+      if (btnDashboardStart) btnDashboardStart.disabled = false;
+      if (btnMapStart) btnMapStart.disabled = false;
 
       // Show offline overlays
       if (dashboardOfflineCard) dashboardOfflineCard.style.display = 'block';
       if (mapOfflineOverlay) mapOfflineOverlay.style.display = 'flex';
-      if (dashboardOfflineTitle) dashboardOfflineTitle.textContent = '서버가 종료되어 있습니다.';
-      if (mapOfflineTitle) mapOfflineTitle.textContent = '지도에 서버가 종료되어 있습니다.';
-      if (btnDashboardStart) {
-        btnDashboardStart.textContent = startBtnText;
-        btnDashboardStart.disabled = false;
-      }
-      if (btnMapStart) {
-        btnMapStart.textContent = startBtnText;
-        btnMapStart.disabled = false;
-      }
 
       // Reset map iframe to about:blank when offline to prevent unnecessary background polling
       const bluemapFrame = document.getElementById('bluemapFrame');

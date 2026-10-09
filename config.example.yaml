@@ -27,3 +27,8 @@ data:
 
 bluemap:
   url: "http://127.0.0.1:8100"
+
+auto_sleep:
+  enabled: true
+  port: 25565
+  idle_timeout_minutes: 10

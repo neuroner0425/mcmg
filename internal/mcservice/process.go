@@ -35,10 +35,11 @@ var (
 
 // ProcessStatusInfo provides snapshot info of server runtime.
 type ProcessStatusInfo struct {
-	Status   string `json:"status"`
-	PID      int    `json:"pid"`
-	Uptime   int64  `json:"uptime_seconds"`
-	JarExist bool   `json:"jar_exist"`
+	Status           string `json:"status"`
+	PID              int    `json:"pid"`
+	Uptime           int64  `json:"uptime_seconds"`
+	JarExist         bool   `json:"jar_exist"`
+	AutoSleepEnabled bool   `json:"auto_sleep_enabled"`
 }
 
 // ProcessManager coordinates the Java child process lifecycle.
@@ -48,10 +49,11 @@ type ProcessManager struct {
 	javaPath     string
 	minMemory    string
 	maxMemory    string
-	rconPassword string
-	rconPort     int
-	rcon         RCONClient
-	chatSvc      *ChatService
+	rconPassword     string
+	rconPort         int
+	rcon             RCONClient
+	chatSvc          *ChatService
+	autoSleepEnabled bool
 
 	mu         sync.Mutex
 	cmd        *exec.Cmd
@@ -319,11 +321,19 @@ func (pm *ProcessManager) GetStatus() ProcessStatusInfo {
 	jarExists := fileExists(jarPath)
 
 	return ProcessStatusInfo{
-		Status:   status,
-		PID:      pid,
-		Uptime:   uptime,
-		JarExist: jarExists,
+		Status:           status,
+		PID:              pid,
+		Uptime:           uptime,
+		JarExist:         jarExists,
+		AutoSleepEnabled: pm.autoSleepEnabled,
 	}
+}
+
+// SetAutoSleepEnabled sets the auto sleep capability state.
+func (pm *ProcessManager) SetAutoSleepEnabled(enabled bool) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	pm.autoSleepEnabled = enabled
 }
 
 // Start launches the Minecraft server Java process with disabled JLine prompts to prevent "> > > >" spam.
@@ -349,16 +359,21 @@ func (pm *ProcessManager) Start() error {
 		return fmt.Errorf("server jar not found at %s: please download Purpur first", jarPath)
 	}
 
-	// Auto-ensure server properties, dimension structure links, and BlueMap configs
+	// Auto-ensure server properties, dimension structure links, BlueMap configs, and Paper optimizations
 	EnsureServerProperties(pm.serverDir, pm.rconPassword, pm.rconPort)
 	EnsureWorldStructure(pm.serverDir)
 	EnsureBlueMapConfig(pm.serverDir)
 	_ = EnsureSquaremapConfig(pm.serverDir, 8100)
+	EnsurePaperOptimizations(pm.serverDir)
 
-	// Disable JLine terminal prompts and ANSI colors when piping stdout
+	// Build optimized JVM arguments with dynamic G1GC periodic heap shrinking & OS memory release
 	args := []string{
 		fmt.Sprintf("-Xms%s", pm.minMemory),
 		fmt.Sprintf("-Xmx%s", pm.maxMemory),
+		"-XX:+UseG1GC",
+		"-XX:G1PeriodicGCInterval=10000",
+		"-XX:MaxHeapFreeRatio=20",
+		"-XX:MinHeapFreeRatio=10",
 		"-Dterminal.jline=false",
 		"-Dterminal.ansi=false",
 		"-jar",
@@ -744,6 +759,20 @@ metrics: true
 					}
 				}
 			}
+		}
+	}
+}
+
+// EnsurePaperOptimizations guarantees idle world pausing to allow full chunk unloading and memory deallocation.
+func EnsurePaperOptimizations(serverDir string) {
+	paperWorldPath := filepath.Join(serverDir, "config", "paper-world-defaults.yml")
+	data, err := os.ReadFile(paperWorldPath)
+	if err == nil {
+		content := string(data)
+		re := regexp.MustCompile(`(?m)^\s*disable-world-ticking-when-empty\s*:\s*false\s*$`)
+		if re.MatchString(content) {
+			newContent := re.ReplaceAllString(content, "  disable-world-ticking-when-empty: true")
+			_ = os.WriteFile(paperWorldPath, []byte(newContent), 0644)
 		}
 	}
 }
